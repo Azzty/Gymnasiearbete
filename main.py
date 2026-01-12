@@ -279,7 +279,7 @@ def run_bots_periodically(bots, interval_seconds=60):
             # och subtraherar det från intervallet för att få tiden till nästa jämna körning.
             wait_time = interval_seconds - (time.time() % interval_seconds)
             print(
-                f"Waiting for {wait_time:.2f} seconds until next run at {time.strftime('%H:%M:%S', time.localtime(time.time() + wait_time))}...")
+                f"Waiting for {wait_time:.2f} seconds until next run at {time.strftime('%H:%M:%S', time.localtime(time.time() + wait_time))}...", flush=True)
             time.sleep(wait_time)
             start_time = time.monotonic()
 
@@ -311,7 +311,7 @@ def run_bots_periodically(bots, interval_seconds=60):
 
                 last_ticker_update = current_time
 
-            print("Running bots...")
+            print("Running bots...", flush=True)
             suggestions = {}
             price_data = retrieve_data(tickers, max_period_length)
             # Kör alla bottar parallelt
@@ -346,13 +346,13 @@ def run_bots_periodically(bots, interval_seconds=60):
 
             end_time = time.monotonic()
             execution_time = end_time - start_time
-            print(f"Finished in {execution_time:.2f} seconds.")
+            print(f"Finished in {execution_time:.2f} seconds.", flush=True)
 
             # Om körningen tog längre tid än intervallet, hoppa direkt till nästa vänt-cykel
             # för att inte hamna i en "dödsspiral" där den försöker komma ikapp.
             if execution_time > interval_seconds:
                 print(
-                    f"WARNING: Execution time ({execution_time:.2f}s) exceeded interval ({interval_seconds}s). Skipping one cycle to catch up.")
+                    f"WARNING: Execution time ({execution_time:.2f}s) exceeded interval ({interval_seconds}s). Skipping one cycle to catch up.", flush=True)
 
     except KeyboardInterrupt:
         print("\nStopping bot execution.")

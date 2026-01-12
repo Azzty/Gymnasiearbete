@@ -95,7 +95,7 @@ def data_writer():
             STOP_EVENT.wait(timeout=1.0)
             update_timer += 1
             if update_timer >= 10:
-                print("Antal prisändringar:", sum(price_updates.values()))
+                print("Antal prisändringar:", sum(price_updates.values()), flush=True)
                 top_stocks = dict(sorted(price_updates.items(), key=operator.itemgetter(1), reverse=True)[:5])
                 print("Mest ändringar: ", top_stocks)
                 update_timer = 0

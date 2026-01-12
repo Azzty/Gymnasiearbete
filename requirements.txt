@@ -1,0 +1,11 @@
+matplotlib==3.10.5
+pandas==2.3.2
+numpy==2.2.6
+tqdm==4.67.1
+yfinance==0.2.65
+pandas-ta==0.4.71b0
+yfrlt==1.0.0
+websocket-client==1.9.0
+rel==0.4.9.23
+Scrapy==2.13.3
+itemadapter==0.12.2

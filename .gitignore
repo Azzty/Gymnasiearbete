@@ -4,5 +4,5 @@ aktiepriser/*
 __pycache__/
 *.pyc
 *.pyo
-portföljer/*
-portföljer/loggar/*
+portföljer/*.json
+portföljer/loggar/*.csv

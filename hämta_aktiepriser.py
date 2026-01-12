@@ -9,6 +9,7 @@ import threading
 from utils import PATH_TILL_PRISER
 import operator
 import time
+from websockets import exceptions as ws_exceptions
 
 """Tack Gemini för att du optimiserade min fil :D"""
 
@@ -132,12 +133,22 @@ def _start_listening(tickers_to_monitor):
 
 def monitor_stocks(tickers_to_monitor: list[str]):
     """Creates a websocket using yfinance to listen to all tickers in tickers_to_monitor"""
-    global _writer_thread, _listener_thread, last_ticker_update
-    STOP_EVENT.clear()
-    last_ticker_update = time.time()
-    if not tickers_to_monitor:
-        raise ValueError(
-            "No tickers were supplied to monitor_stocks. The list cannot be empty.")
+    while True:
+        try:
+            global _writer_thread, _listener_thread, last_ticker_update
+            STOP_EVENT.clear()
+            last_ticker_update = time.time()
+            if not tickers_to_monitor:
+                raise ValueError(
+                    "No tickers were supplied to monitor_stocks. The list cannot be empty.")
+        except ws_exceptions.ConnectionClosedOK:
+            print("WebSocket connection closed normally. Reconnecting in 1s...")
+            time.sleep(1)
+            continue
+        except Exception as e:
+            print(f"Error in monitor_stocks: {e}. Reconnecting in 5s...")
+            time.sleep(5)
+            continue
 
     # Ta bort gammal aktiedata
     today_date = str(dt.date.today())

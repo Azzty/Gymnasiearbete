@@ -121,35 +121,32 @@ _listener_thread = None
 def _start_listening(tickers_to_monitor):
     """Intern funktion som körs i en egen tråd för att lyssna på WebSocket."""
     global _ws, _tickers_to_monitor
-    with yf.WebSocket() as ws:
-        _ws = ws
-        _tickers_to_monitor = tickers_to_monitor
-        # print(f"Subscribing to: {', '.join(tickers_to_monitor)}")
-        ws.subscribe(tickers_to_monitor)
-        print(f"Listening for trades on: {', '.join(tickers_to_monitor)}")
-        ws.listen(message_handler)
-    print("WebSocket listener has stopped.")
+    while not STOP_EVENT.is_set():
+        try:
+            with yf.WebSocket() as ws:
+                _ws = ws
+                _tickers_to_monitor = tickers_to_monitor
+                # print(f"Subscribing to: {', '.join(tickers_to_monitor)}")
+                ws.subscribe(tickers_to_monitor)
+                print(f"Listening for trades on: {', '.join(tickers_to_monitor)}")
+                ws.listen(message_handler)
+        except ws_exceptions.ConnectionClosedOK as e:
+            print("WebSocket connection closed normally, reconnecting in 1s. Exception:", e)
+            time.sleep(1)  # Vänta lite innan återanslutning
+        except Exception as e:
+            print("WebSocket connection error, reconnecting in 5s. Exception:", e)
+            time.sleep(5)  # Vänta lite längre vid fel innan återanslutning
+        print("WebSocket listener has stopped.")
 
 
 def monitor_stocks(tickers_to_monitor: list[str]):
     """Creates a websocket using yfinance to listen to all tickers in tickers_to_monitor"""
-    while not STOP_EVENT.is_set():
-        try:
-            global _writer_thread, _listener_thread, last_ticker_update
-            STOP_EVENT.clear()
-            last_ticker_update = time.time()
-            if not tickers_to_monitor:
-                raise ValueError(
-                    "No tickers were supplied to monitor_stocks. The list cannot be empty.")
-        except ws_exceptions.ConnectionClosedOK:
-            print("WebSocket connection closed normally. Reconnecting in 1s...")
-            time.sleep(1)
-            continue
-        except Exception as e:
-            print(f"Error in monitor_stocks: {e}. Reconnecting in 5s...")
-            time.sleep(5)
-            continue
-
+    global _writer_thread, _listener_thread, last_ticker_update
+    
+    if not tickers_to_monitor:
+        raise ValueError(
+            "No tickers were supplied to monitor_stocks. The list cannot be empty.")
+    
     # Ta bort gammal aktiedata
     today_date = str(dt.date.today())
     with open(os.path.join(PATH_TILL_PRISER, "_date.txt"), "r+") as f:

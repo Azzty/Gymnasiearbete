@@ -133,7 +133,7 @@ def _start_listening(tickers_to_monitor):
 
 def monitor_stocks(tickers_to_monitor: list[str]):
     """Creates a websocket using yfinance to listen to all tickers in tickers_to_monitor"""
-    while True:
+    while not STOP_EVENT.is_set():
         try:
             global _writer_thread, _listener_thread, last_ticker_update
             STOP_EVENT.clear()

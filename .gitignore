@@ -1,0 +1,3 @@
+aktiepriser/*
+!aktiepriser/_date*
+!aktiepriser/test*

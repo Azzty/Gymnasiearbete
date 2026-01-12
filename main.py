@@ -1,7 +1,7 @@
 from zoneinfo import ZoneInfo
 import datetime as dt
 from hitta_100 import get_most_active_stocks
-from hämta_aktiepriser import monitor_stocks, stop_monitoring
+from hämta_aktiepriser import monitor_stocks, stop_monitoring, start_websocket_watchdog
 from mäklare import sma, ema, macd, obv, random_trader, rsi, uppner, stoch, cci, tmf
 import handla_aktie as ha
 import time
@@ -11,6 +11,7 @@ import inspect
 import json
 import csv
 from concurrent.futures import ThreadPoolExecutor
+from threading import Thread
 
 child_dir = os.path.dirname(__file__)
 parent_dir = os.path.abspath(os.path.join(child_dir, '..'))
@@ -260,6 +261,9 @@ def run_bots_periodically(bots, interval_seconds=60):
         last_ticker_update = time.time()
         _start_attempts = 0
         _has_started = False
+
+        _watchdog_thread = Thread(target=start_websocket_watchdog, daemon=True)
+        _watchdog_thread.start()
         while True:
             # Check if market is open
             if not us_market_open():
@@ -308,6 +312,7 @@ def run_bots_periodically(bots, interval_seconds=60):
                 for bot in bots:
                     bot_owned = get_bot_owned_tickers(bot)
                     bot.tickers = list(top_active_tickers.union(bot_owned))
+                    top_active_tickers.update(new_tickers_to_monitor)
 
                 last_ticker_update = current_time
 
@@ -326,7 +331,11 @@ def run_bots_periodically(bots, interval_seconds=60):
                 for future in futures:
                     bot_name, options = future.result()
                     suggestions[bot_name] = options
-                    log_portfolio_value(bot_name, ha.load_portfolio(bot_name))
+                    portfolio = ha.load_portfolio(bot_name)
+                    if portfolio is not None:
+                        log_portfolio_value(bot_name, portfolio)
+                    else:
+                        print(f"WARNING: Could not log portfolio value for {bot_name} because portfolio is None.")
 
             if SHOW_SUGGESTIONS:
                 # Log results

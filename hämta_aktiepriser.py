@@ -28,6 +28,8 @@ STOP_EVENT = Event()
 FILES_TO_KEEP = ['_date.txt', 'TESTTABELL.csv',
                  'TESTTABELL2.csv', 'TESTTABELL3.csv']
 
+MAX_WEBSOCKET_SESSION_TIME = 10 * 60  # 10 minuter (yfinance har en tendens att koppla bort efter en stund)
+
 last_ticker_update = 0.0
 _tickers_to_monitor = []
 
@@ -118,6 +120,28 @@ _ws = None
 _writer_thread = None
 _listener_thread = None
 
+def start_websocket_watchdog(timeout: int = 5):
+    """Kontrollerar WebSocket-anslutningen och återansluter vid behov.
+    Körs i en separat tråd.
+    Behöver startas manuellt efter att monitor_stocks har anropats.
+    """
+    global last_ticker_update, _tickers_to_monitor
+    last_ticker_update = time.time()
+    session_start = time.time()
+    while not STOP_EVENT.is_set():
+        time.sleep(timeout)  # Kontrollera var (timeout) sekunder
+        if time.time() - last_ticker_update >= timeout:
+            print("WebSocket watchdog: No messages received in the last "
+                  f"{timeout} seconds. Reconnecting...", flush=True)
+            stop_monitoring()
+            monitor_stocks(_tickers_to_monitor)
+            session_start = time.time()  # Återställ sessionens starttid
+        elif time.time() - session_start >= MAX_WEBSOCKET_SESSION_TIME:
+            print("WebSocket watchdog: Maximum session time reached. Reconnecting...", flush=True)
+            stop_monitoring()
+            monitor_stocks(_tickers_to_monitor)
+            session_start = time.time()  # Återställ sessionens starttid
+
 def _start_listening(tickers_to_monitor):
     """Intern funktion som körs i en egen tråd för att lyssna på WebSocket."""
     global _ws, _tickers_to_monitor
@@ -129,7 +153,7 @@ def _start_listening(tickers_to_monitor):
                 # print(f"Subscribing to: {', '.join(tickers_to_monitor)}")
                 ws.subscribe(tickers_to_monitor)
                 print(f"Listening for trades on: {', '.join(tickers_to_monitor)}")
-                ws.listen(message_handler)
+                ws.listen(message_handler) # <-- This will block until the connection is closed (IS A PROBLEM)
         except ws_exceptions.ConnectionClosedOK as e:
             print("WebSocket connection closed normally, reconnecting in 1s. Exception:", e)
             time.sleep(1)  # Vänta lite innan återanslutning
@@ -142,6 +166,8 @@ def _start_listening(tickers_to_monitor):
 def monitor_stocks(tickers_to_monitor: list[str]):
     """Creates a websocket using yfinance to listen to all tickers in tickers_to_monitor"""
     global _writer_thread, _listener_thread, last_ticker_update
+
+    STOP_EVENT.clear()
     
     if not tickers_to_monitor:
         raise ValueError(

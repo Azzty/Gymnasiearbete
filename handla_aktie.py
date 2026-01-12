@@ -18,6 +18,7 @@ import threading
 import queue
 
 TESTING = False
+PRINT_TRANSACTIONS = False
 
 log_queue = queue.Queue()
 _log_thread = None
@@ -341,8 +342,8 @@ def utför_flera_transaktioner(bot_name: str, transaktioner: list):
                 log(bot_name, ticker, 'BUY', amount, price)
                 results.append(ERROR_CODES.SUCCESS)
                 portfolio_changed = True
-                print(
-                    f"{bot_name} köpte {amount} st {ticker} för ${cost:.2f} (Batch).")
+                if PRINT_TRANSACTIONS:
+                    print(f"{bot_name} köpte {amount} st {ticker} för ${cost:.2f} (Batch).")
 
             elif action == "SELL":
                 owned = portfolio.get('aktier', {}).get(ticker, 0)
@@ -361,8 +362,8 @@ def utför_flera_transaktioner(bot_name: str, transaktioner: list):
                 log(bot_name, ticker, 'SELL', to_sell, price)
                 results.append(ERROR_CODES.SUCCESS)
                 portfolio_changed = True
-                print(
-                    f"{bot_name} sålde {to_sell} st {ticker} för ${income:.2f} (Batch).")
+                if PRINT_TRANSACTIONS:
+                    print(f"{bot_name} sålde {to_sell} st {ticker} för ${income:.2f} (Batch).")
 
         if portfolio_changed:
             with open(portfolio_path, 'w') as f:

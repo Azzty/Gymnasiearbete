@@ -431,7 +431,7 @@ if __name__ == "__main__":
         print("Avbryter programmet...")
     finally:
         # Städa upp och stäng anslutningar när loopen avbryts
-        sell_all_bot_portfolios()
         stop_monitoring()
+        sell_all_bot_portfolios()
         ha.stop_logger()
         print("Program exited successfully.")

@@ -160,15 +160,12 @@ def _start_listening(tickers_to_monitor):
                 ws.subscribe(tickers_to_monitor)
                 ws.listen(message_handler)
         except ws_exceptions.ConnectionClosedOK:
-            # Normal/expected close (e.g. due to calling stop_monitoring()). Don't print exception text.
             logging.info("WebSocket closed normally; reconnecting in 1s.")
             time.sleep(1)  # Vänta lite innan återanslutning
         except ws_exceptions.ConnectionClosedError as e:
-            # Non-OK close codes — warn and reconnect
             logging.warning("WebSocket closed with error (%s); reconnecting in 5s.", e)
             time.sleep(5)
         except Exception:
-            # Unexpected errors: include stacktrace for debugging
             logging.exception("Unexpected WebSocket error; reconnecting in 5s.")
             time.sleep(5)  # Vänta lite längre vid fel innan återanslutning
         finally:
@@ -187,8 +184,10 @@ def monitor_stocks(tickers_to_monitor: list[str]):
     
     # Ta bort gammal aktiedata
     today_date = str(dt.date.today())
-    with open(os.path.join(PATH_TILL_PRISER, "_date.txt"), "r+") as f:
-        if f.read() != today_date:
+    with open(os.path.join(PATH_TILL_PRISER, "_date.txt"), "a+") as f:
+        f.seek(0)
+        content = f.read().strip()
+        if content != today_date:
             thread_safe_print("\n--------- NY DAG! TAR BORT GAMLA FILER ---------")
             remove_count = 0
             for filename in os.listdir(PATH_TILL_PRISER):
@@ -216,9 +215,9 @@ def monitor_stocks(tickers_to_monitor: list[str]):
 def stop_monitoring():
     """Stänger WebSocket-anslutningen och stoppar bakgrundstrådarna."""
     thread_safe_print("Shutting down monitoring...")
+    STOP_EVENT.set()
     if _ws:
         _ws.close()
-    STOP_EVENT.set()
     if _writer_thread and _writer_thread != threading.current_thread():
         _writer_thread.join(timeout=5)  # Vänta på att skrivartråden ska avslutas, med en timeout
         if _writer_thread.is_alive():

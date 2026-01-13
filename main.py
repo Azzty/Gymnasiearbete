@@ -194,11 +194,6 @@ def run_bot(bot):
     thread_safe_print(
         f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Running bot '{bot.bot_name}'...")
 
-    # Check if we have enough historical data for the bot
-    if not all(len(price_data.get(t, [])) >= bot.required_period for t in bot.tickers):
-        thread_safe_print(f"Skipping {bot.bot_name}: Not enough historical data (need {bot.required_period} points)")
-        return bot.bot_name, {}
-
     bot_suggestions = {}
 
     # if possible, use already loaded price data instead of retrieving it again

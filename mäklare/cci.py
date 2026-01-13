@@ -35,7 +35,7 @@ class CCIBot():
 
         # Iterate through each stock's data to calculate EMAs and find signals.
         for t, df in price_data.items():
-            # Calculate the short-period and long-period Exponential Moving Averages (EMA).
+            # cci is none if length of data is insufficient
             cci = ta.cci(df['HIGH'], df['LOW'], df['PRICE'], self.length)
             
             if cci is None or cci.empty:
@@ -64,3 +64,12 @@ class CCIBot():
                     self.states[t] = 'NEUTRAL'
 
         return suggestions
+
+if __name__ == "__main__":
+    # temp test
+    bot = CCIBot("Test CCI Bot", ["AAPL"], risk=0.05)
+
+    # data without enough points
+    data = retrieve_data(["AAPL"], length=5)
+    suggestions = bot.find_options(data)
+    print("Suggestions:", suggestions)

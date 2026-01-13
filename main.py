@@ -17,7 +17,7 @@ child_dir = os.path.dirname(__file__)
 parent_dir = os.path.abspath(os.path.join(child_dir, '..'))
 sys.path.append(parent_dir)
 
-from utils import PATH_TILL_PRISER, PATH_TILL_PORTFÖLJER, PATH_TILL_LOGGAR, retrieve_data, ERROR_CODES  # nopep8
+from utils import PATH_TILL_PORTFÖLJER, PATH_TILL_LOGGAR, retrieve_data, ERROR_CODES, thread_safe_print  # nopep8
 
 SHOW_SUGGESTIONS = False
 
@@ -62,7 +62,7 @@ def trade_suggestions(bot, bot_suggestions: dict):
     
     # Ensure portfolio exists
     if not os.path.exists(portfolio_path):
-        print(f"Portfölj för '{bot.bot_name}' existerar inte. Skapar en ny portfölj.")
+        thread_safe_print(f"Portfölj för '{bot.bot_name}' existerar inte. Skapar en ny portfölj.")
         with open(portfolio_path, "w") as f:
             portfolio_setup = json.dumps({"fria_pengar": 100_000, "aktier": {}})
             f.write(portfolio_setup)
@@ -72,7 +72,7 @@ def trade_suggestions(bot, bot_suggestions: dict):
         with open(portfolio_path, "r") as f:
             portfolio = json.load(f)
     except (IOError, json.JSONDecodeError):
-        print(f"Could not read portfolio for {bot.bot_name}")
+        thread_safe_print(f"Could not read portfolio for {bot.bot_name}")
         return
 
     current_cash = portfolio.get("fria_pengar", 0)
@@ -83,11 +83,11 @@ def trade_suggestions(bot, bot_suggestions: dict):
         if action == "BUY":
             # Kolla om t är i top 100, annars skippa
             if t in owned_tickers and t not in top_active_tickers:
-                print(f"{bot.bot_name} försökte köpa {t}, men den är inte top 100. Skippar...")
+                thread_safe_print(f"{bot.bot_name} försökte köpa {t}, men den är inte top 100. Skippar...")
                 continue
             # Kolla om ticker finns i pris_data, annars skippa
             if t not in price_data:
-                print(f"WARNING: Could not get price data for {t} to buy, skipping...")
+                thread_safe_print(f"WARNING: Could not get price data for {t} to buy, skipping...")
                 continue
             # Köp inget nytt precis innan marknaden stänger
             if get_time_to_market_close() < dt.timedelta(minutes=10):
@@ -109,7 +109,7 @@ def trade_suggestions(bot, bot_suggestions: dict):
                 continue  # Vi har inget att sälja
             # Make sure we have price data before trying to access it
             if t not in price_data:
-                print(f"WARNING: Could not get price data for {t} to sell, skipping...")
+                thread_safe_print(f"WARNING: Could not get price data for {t} to sell, skipping...")
                 continue
             amount = owned_shares[t]
             price = price_data[t]["PRICE"].iloc[-1]
@@ -121,7 +121,7 @@ def trade_suggestions(bot, bot_suggestions: dict):
         for i, res in enumerate(results):
             t = transactions[i]["ticker"]
             if res not in [ERROR_CODES.SUCCESS, ERROR_CODES.ADD_SHARES_NOT_ALLOWED]:
-                print(f"Problem uppstod när {bot.bot_name} skulle handla {t}. Felkod:{res.value}")
+                thread_safe_print(f"Problem uppstod när {bot.bot_name} skulle handla {t}. Felkod:{res.value}")
             
             if transactions[i]["action"] == "SELL" and res == ERROR_CODES.SUCCESS:
                 if t in owned_tickers and not is_ticker_owned(t):
@@ -142,7 +142,7 @@ def is_ticker_owned(ticker: str) -> bool:
                     if 'aktier' in portfolio and ticker in portfolio['aktier'] and portfolio['aktier'][ticker] > 0:
                         return True
             except (IOError, json.JSONDecodeError) as e:
-                print(
+                thread_safe_print(
                     f"Warning: Could not read portfolio for {bot.bot_name} while checking ownership: {e}")
     return False
 
@@ -164,7 +164,7 @@ def get_all_owned_tickers(bots):
                     if 'aktier' in portfolio:
                         owned_tickers.update(portfolio['aktier'].keys())
             except (IOError, json.JSONDecodeError) as e:
-                print(
+                thread_safe_print(
                     f"Warning: Could not read portfolio for {bot.bot_name}: {e}")
     return owned_tickers
 
@@ -184,19 +184,19 @@ def get_bot_owned_tickers(bot) -> set:
                     owned.update(
                         {ticker for ticker, amount in portfolio['aktier'].items() if amount > 0})
         except (IOError, json.JSONDecodeError) as e:
-            print(
+            thread_safe_print(
                 f"Warning: Could not read portfolio for {bot.bot_name} while getting its owned tickers: {e}")
     return owned
 
 
 def run_bot(bot):
     """Worker funktion för att hämta suggestions och handla aktier efter suggestions"""
-    print(
-        f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] Running bot '{bot.bot_name}'...")
+    thread_safe_print(
+        f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Running bot '{bot.bot_name}'...")
 
     # Check if we have enough historical data for the bot
     if not all(len(price_data.get(t, [])) >= bot.required_period for t in bot.tickers):
-        print(f"Skipping {bot.bot_name}: Not enough historical data (need {bot.required_period} points)")
+        thread_safe_print(f"Skipping {bot.bot_name}: Not enough historical data (need {bot.required_period} points)")
         return bot.bot_name, {}
 
     bot_suggestions = {}
@@ -223,7 +223,7 @@ def log_portfolio_value(bot_name:str, portfolio:dict) -> None:
     :type portfolio: dict
     """
     if portfolio is None:
-        print(f"WARNING: Portfolio for {bot_name} is None, cannot log value.")
+        thread_safe_print(f"WARNING: Portfolio for {bot_name} is None, cannot log value.")
         return
     log_file_path = os.path.join(
         PATH_TILL_LOGGAR, "portfolio-logg-" + dt.date.today().strftime("%Y-%m-%d") + ".csv")
@@ -243,7 +243,7 @@ def log_portfolio_value(bot_name:str, portfolio:dict) -> None:
             if stock_price is not None:
                 portfolio_value += stock_price * amount
             else:
-                print(f"WARNING: Could not get price for {ticker} while logging portfolio value for {bot_name}, skipping...")
+                thread_safe_print(f"WARNING: Could not get price for {ticker} while logging portfolio value for {bot_name}, skipping...")
                 continue
         writer.writerow([dt.datetime.now(), bot_name, portfolio_value])
 
@@ -253,7 +253,7 @@ def run_bots_periodically(bots, interval_seconds=60):
 	Kör en lista bottar med jämna mellanrum.
 	Siktar på att köra på i början av varje klockslag (e.g 15:30:00).
 	"""
-    print(
+    thread_safe_print(
         f"Starting periodic bot execution every {interval_seconds} seconds. Press Ctrl+C to stop.")
     try:
         # Timer to check for new active stocks less frequently than every bot run
@@ -268,12 +268,12 @@ def run_bots_periodically(bots, interval_seconds=60):
             # Check if market is open
             if not us_market_open():
                 if _has_started:
-                    print("Market is closed. Stopping bot execution.")
+                    thread_safe_print("Market is closed. Stopping bot execution.")
                     break  # If program has already been run, then exit
                 _start_attempts += 1
                 time.sleep(60)
                 if _start_attempts > 20:  # Vänta max 20 min
-                    print("Market did not open. Program failed to start.")
+                    thread_safe_print("Market did not open. Program failed to start.")
                     break
             else:
                 _has_started = True
@@ -282,7 +282,7 @@ def run_bots_periodically(bots, interval_seconds=60):
             # Vi använder modulo för att hitta hur många sekunder in i nästa intervall vi är
             # och subtraherar det från intervallet för att få tiden till nästa jämna körning.
             wait_time = interval_seconds - (time.time() % interval_seconds)
-            print(
+            thread_safe_print(
                 f"Waiting for {wait_time:.2f} seconds until next run at {time.strftime('%H:%M:%S', time.localtime(time.time() + wait_time))}...", flush=True)
             time.sleep(wait_time)
             start_time = time.monotonic()
@@ -290,25 +290,25 @@ def run_bots_periodically(bots, interval_seconds=60):
             # 2. Periodically update the list of monitored tickers
             current_time = time.time()
             if current_time - last_ticker_update > ticker_update_interval:
-                print("\nChecking for new most active stocks...")
+                thread_safe_print("\nChecking for new most active stocks...")
                 new_tickers_to_monitor = set(
                     get_most_active_stocks().split(" "))
 
                 # Update list of tickers to monitor
                 if new_tickers_to_monitor != set(tickers):
-                    print("Ticker pool has changed. Restarting monitor...")
-                    print(f"Previously monitoring {len(tickers)} tickers.")
+                    thread_safe_print("Ticker pool has changed. Restarting monitor...")
+                    thread_safe_print(f"Previously monitoring {len(tickers)} tickers.")
                     tickers = list(new_tickers_to_monitor)
                 else:
-                    print("Ticker pool is unchanged.")
+                    thread_safe_print("Ticker pool is unchanged.")
 
                 # Always refresh websockets to prevent timeout
                 stop_monitoring()
                 monitor_stocks(tickers)
-                print(f"Monitoring restarted with {len(tickers)} tickers.")
+                thread_safe_print(f"Monitoring restarted with {len(tickers)} tickers.")
 
                 # Update tickers for each bot instance individually
-                print("Updating individual bot ticker lists...")
+                thread_safe_print("Updating individual bot ticker lists...")
                 for bot in bots:
                     bot_owned = get_bot_owned_tickers(bot)
                     bot.tickers = list(top_active_tickers.union(bot_owned))
@@ -316,7 +316,7 @@ def run_bots_periodically(bots, interval_seconds=60):
 
                 last_ticker_update = current_time
 
-            print("Running bots...", flush=True)
+            thread_safe_print("Running bots...", flush=True)
             suggestions = {}
             price_data = retrieve_data(tickers, max_period_length)
             # Kör alla bottar parallelt
@@ -335,36 +335,36 @@ def run_bots_periodically(bots, interval_seconds=60):
                     if portfolio is not None:
                         log_portfolio_value(bot_name, portfolio)
                     else:
-                        print(f"WARNING: Could not log portfolio value for {bot_name} because portfolio is None.")
+                        thread_safe_print(f"WARNING: Could not log portfolio value for {bot_name} because portfolio is None.")
 
             if SHOW_SUGGESTIONS:
                 # Log results
                 if suggestions.values():
-                    print("Suggestions found:")
-                    # print("DEBUG: suggestions:", suggestions)
+                    thread_safe_print("Suggestions found:")
+                    # thread_safe_print("DEBUG: suggestions:", suggestions)
                     bot_suggestions: dict
                     for bot_name, bot_suggestions in suggestions.items():
                         if len(bot_suggestions) == 0:
-                            print(bot_name, "had no suggestions")
+                            thread_safe_print(bot_name, "had no suggestions")
                         else:
-                            print(bot_name + ":")
+                            thread_safe_print(bot_name + ":")
                         for ticker, action in bot_suggestions.items():
-                            print(f"  - {ticker}: {action}")
+                            thread_safe_print(f"  - {ticker}: {action}")
                 else:
-                    print("No trading suggestions at this time.")
+                    thread_safe_print("No trading suggestions at this time.")
 
             end_time = time.monotonic()
             execution_time = end_time - start_time
-            print(f"Finished in {execution_time:.2f} seconds.", flush=True)
+            thread_safe_print(f"Finished in {execution_time:.2f} seconds.", flush=True)
 
             # Om körningen tog längre tid än intervallet, hoppa direkt till nästa vänt-cykel
             # för att inte hamna i en "dödsspiral" där den försöker komma ikapp.
             if execution_time > interval_seconds:
-                print(
+                thread_safe_print(
                     f"WARNING: Execution time ({execution_time:.2f}s) exceeded interval ({interval_seconds}s). Skipping one cycle to catch up.", flush=True)
 
     except KeyboardInterrupt:
-        print("\nStopping bot execution.")
+        thread_safe_print("\nStopping bot execution.")
 
 
 # Säljer allt innehav hos alla bottar
@@ -437,10 +437,10 @@ if __name__ == "__main__":
     try:
         run_bots_periodically(bots, interval_seconds=60)
     except KeyboardInterrupt:
-        print("Avbryter programmet...")
+        thread_safe_print("Avbryter programmet...")
     finally:
         # Städa upp och stäng anslutningar när loopen avbryts
         stop_monitoring()
         sell_all_bot_portfolios()
         ha.stop_logger()
-        print("Program exited successfully.")
+        thread_safe_print("Program exited successfully.")

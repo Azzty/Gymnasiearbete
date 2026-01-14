@@ -99,7 +99,7 @@ def data_writer():
             if update_timer >= 10:
                 thread_safe_print(time.strftime("%H:%M:%S"),"Antal prisändringar:", sum(price_updates.values()), flush=True)
                 top_stocks = dict(sorted(price_updates.items(), key=operator.itemgetter(1), reverse=True)[:5])
-                thread_safe_print("Mest ändringar: ", top_stocks)
+                thread_safe_print("Mest ändringar: ", top_stocks, flush=True)
                 update_timer = 0
                 price_updates.clear()
     finally:

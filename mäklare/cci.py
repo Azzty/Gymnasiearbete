@@ -40,9 +40,11 @@ class CCIBot():
                 continue
             # Manual CCI calculation because pandas_ta CCI is broken
             typical_price = hlc3(high=df['HIGH'], low=df['LOW'], close=df['PRICE'], talib=False)
-            mean_typical_price = sma(typical_price, length=20, talib=False)
-            mad_typical_price = mad(typical_price, length=20)
+            mean_typical_price = sma(typical_price, length=self.length, talib=False)
+            mad_typical_price = mad(typical_price, length=self.length)
 
+            if typical_price is None or mean_typical_price is None or mad_typical_price is  None:
+                continue
             cci = (typical_price - mean_typical_price) / (0.015 * mad_typical_price)
                     
             if cci is None or cci.empty:

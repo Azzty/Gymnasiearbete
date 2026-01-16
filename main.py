@@ -391,7 +391,7 @@ if __name__ == "__main__":
                          short_period=9, long_period=21)
     ema_bot = ema.EMABot("ema_crossover_bot", tickers,
                          short_period=9, long_period=21)
-    macd_cross_bot = macd.MACDCrossoverBot("macd_crossover_bot", tickers)
+    macd_cross_bot = macd.MACDCrossoverBot("macd_crossover_bot", tickers, short_period=5, long_period=35, signal_period=5)
     # macd_zeroline_bot = macd.MACDZerolineBot("macd_zeroline_bot", tickers)
     obv_bot = obv.OBVBot("obv_bot", tickers, 9)
     random_bot = random_trader.RandomBot("random_bot", tickers)
@@ -399,7 +399,7 @@ if __name__ == "__main__":
     up_down_bot = uppner.UppDownBot("up_down_bot", tickers)
     stoch_bot = stoch.StochBot("stoch_bot", tickers, k_period=5)
     cci_bot = cci.CCIBot("cci_bot", tickers, length=14)
-    tmf_bot = tmf.TMFBot("tmf_bot", tickers)
+    tmf_bot = tmf.TMFBot("tmf_bot", tickers, length=14)
 
     # Set required warmup periods for each bot
     sma_bot.required_period = sma_bot.long_period

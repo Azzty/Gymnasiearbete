@@ -21,7 +21,7 @@ class MACDCrossoverBot():
     `short_period` and `long_period` is the period for the short and long ema line respectively.
     `risk` is percentage of portfolio to spend on each purchase"""
 
-    def __init__(self, bot_name: str, tickers: list[str], risk: float = 0.02, short_period: int = 9, long_period: int = 21):
+    def __init__(self, bot_name: str, tickers: list[str], risk: float = 0.02, short_period: int = 9, long_period: int = 21, signal_period: int = 9):
         # Bot identification and portfolio name
         self.bot_name = bot_name
         # List of stock tickers to analyze
@@ -29,6 +29,7 @@ class MACDCrossoverBot():
         # The two periods for the short and long EMA periods
         self.short_period = short_period
         self.long_period = long_period
+        self.signal_period = signal_period
         self.risk = risk
 
     def find_options(self, price_data: dict | None = None):
@@ -39,7 +40,7 @@ class MACDCrossoverBot():
         base_date = datetime.datetime(1900, 1, 1)  # Startdatum för timestamps
         # Iterate through each stock's data to calculate EMAs and find signals.
         for t, df in price_data.items():
-            macd = ta.macd(df["PRICE"])
+            macd = ta.macd(df["PRICE"], self.short_period, self.long_period, self.signal_period)
             if macd is None or macd.empty: continue
 
             # The bot runs at the start of the minute (e.g., 14:30:00). We need to check if a crossover
@@ -47,8 +48,8 @@ class MACDCrossoverBot():
             target_timestamp = (pandas.Timestamp.combine(base_date, datetime.datetime.now(
             ).time()).floor("min") - pandas.Timedelta(minutes=1))
             # target_timestamp = pandas.Timestamp.fromisoformat("1900-01-01 19:50:00") # USE FOR DEBUG WITH TESTABELL3
-            
-            intersects = find_intersects(macd['MACD_12_26_9'], macd['MACDs_12_26_9'])
+
+            intersects = find_intersects(macd[f'MACD_{self.short_period}_{self.long_period}_{self.signal_period}'], macd[f'MACDs_{self.short_period}_{self.long_period}_{self.signal_period}'])
             # If a crossover just happened
             if intersects and [*intersects.keys()][-1] == target_timestamp:
                 # Check the most recent crossover. 'over' means the short EMA crossed above the long EMA (a buy signal).
@@ -148,18 +149,20 @@ if __name__ == "__main__":
     print(bot1.find_options())
     bot2 = MACDZerolineBot("exempel2", [aktie])
     print(bot2.find_options())
+    bot3 = MACDCrossoverBot("exempel3", [aktie], short_period=5, long_period=34, signal_period=5)
+    print(bot3.find_options())
 
     df = retrieve_data([aktie], 5*26)[aktie]
 
-    macd = ta.macd(df['PRICE'])
+    macd = ta.macd(df['PRICE'], 5, 35, 5)
 
     plt.figure(1)
     plt.plot(df.index, df['PRICE'], label='Price')
     plt.legend()
     plt.figure(2)
-    plt.plot(df.index, macd['MACD_12_26_9'], label='MACD')
-    plt.plot(df.index, macd['MACDs_12_26_9'], label='Signal')
-    plt.bar(df.index, macd['MACDh_12_26_9'], label='Histogram', width=0.0002)
+    plt.plot(df.index, macd['MACD_5_35_5'], label='MACD')
+    plt.plot(df.index, macd['MACDs_5_35_5'], label='Signal')
+    plt.bar(df.index, macd['MACDh_5_35_5'], label='Histogram', width=0.0002)
     plt.axhline(0, color='grey', linestyle='--', linewidth=0.8)
     plt.legend()
     plt.show()

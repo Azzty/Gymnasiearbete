@@ -7,6 +7,7 @@ import pandas
 import os
 from io import StringIO
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 
 
 class ERROR_CODES(Enum):
@@ -156,6 +157,12 @@ def retrieve_data(tickers: list[str], length: int):
 
     return dataframes
 
+print_lock = Lock()
+
+def thread_safe_print(*args, **kwargs):
+    """Tråd-säker thread_safe_print-funktion för att undvika utskriftskrockar."""
+    with print_lock:
+        print(*args, **kwargs)
 
 if __name__ == "__main__":
     # testing

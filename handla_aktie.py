@@ -9,7 +9,7 @@ En kodfil för att hantera simulerade köp och säljning av aktier
 import yfinance as yf
 import json
 import os
-from utils import ERROR_CODES, PATH_TILL_PORTFÖLJER, PATH_TILL_PRISER, PATH_TILL_LOGGAR
+from utils import ERROR_CODES, PATH_TILL_PORTFÖLJER, PATH_TILL_PRISER, PATH_TILL_LOGGAR, thread_safe_print
 import csv
 import datetime
 from math import floor
@@ -18,6 +18,7 @@ import threading
 import queue
 
 TESTING = False
+PRINT_TRANSACTIONS = False
 
 log_queue = queue.Queue()
 _log_thread = None
@@ -48,7 +49,7 @@ def log_writer():
             row = log_queue.get()  # Yieldar tills något hamnar i kön
             if row is None:
                 log_queue.task_done()  # Signal that the sentinel value is processed
-                print("Logger thread closed.")
+                thread_safe_print("Logger thread closed.")
                 break
             writer.writerow(row)
             log_queue.task_done()
@@ -65,7 +66,7 @@ def start_logger():
 
 def stop_logger():
     """Signals the logger to shut down and waits for it to finish."""
-    print("Requesting logger shutdown...")
+    thread_safe_print("Requesting logger shutdown...")
     log_queue.put(None)  # Send the sentinel value
     if _log_thread and _log_thread.is_alive():
         _log_thread.join()  # Wait for the thread to process the queue and terminate
@@ -75,7 +76,7 @@ def load_portfolio(bot_name: str) -> Optional[dict]:
     """Ladda portföljen för en given bot."""
     portfolio_path = os.path.join(PATH_TILL_PORTFÖLJER, bot_name + ".json")
     if not os.path.exists(portfolio_path):
-        print(f"Portfölj för '{bot_name}' existerar inte.")
+        thread_safe_print(f"Portfölj för '{bot_name}' existerar inte.")
         return None
 
     try:
@@ -83,7 +84,7 @@ def load_portfolio(bot_name: str) -> Optional[dict]:
             portfolio = json.load(f)
             return portfolio
     except (IOError, json.JSONDecodeError) as e:
-        print(f"Kunde inte läsa portföljfilen: {e}")
+        thread_safe_print(f"Kunde inte läsa portföljfilen: {e}")
         return None
 
 
@@ -102,7 +103,7 @@ def _get_stock_price(ticker) -> Tuple[Optional[float], ERROR_CODES]:
     """Funktion för att hämta det senaste priset av en aktie via dess ticker."""
     # try:
     if not _validate_stock(ticker):
-        print(f"Kunde inte hitta ticker med namn {ticker}.")
+        thread_safe_print(f"Kunde inte hitta ticker med namn {ticker}.")
         return None, ERROR_CODES.INVALID_TICKER
 
     file_path = os.path.join(PATH_TILL_PRISER, f"{ticker}.csv")
@@ -129,11 +130,11 @@ def _get_stock_price(ticker) -> Tuple[Optional[float], ERROR_CODES]:
     # If the last_line is empty or just a header, or if it's the header itself
     # (e.g., "TIME,PRICE,CHANGE_PERCENT,CHANGE,CUM_VOLUME"), then fetch from yfinance.
     if not price_file_exists or not last_line or "TIME" in last_line:
-        print("File for", ticker, "price not found, attempting request from yfinance")
+        thread_safe_print("File for", ticker, "price not found, attempting request from yfinance")
         stock = yf.Ticker(ticker)
         history = stock.history(period="1d", interval="1m")
         if history.empty:
-            print(f"Kunde inte hitta historik för {ticker}.")
+            thread_safe_print(f"Kunde inte hitta historik för {ticker}.")
             return None, ERROR_CODES.HISTORY_NOEXIST
         price = history['Close'].iloc[-1]
     else:
@@ -143,7 +144,7 @@ def _get_stock_price(ticker) -> Tuple[Optional[float], ERROR_CODES]:
 
     # except Exception as e:
     #     # Något hände, whoopsie daisy
-    #     print(f"Ett fel uppstod vid hämtning av pris för {ticker}: {e.with_traceback(e.__traceback__)}")
+    #     thread_safe_print(f"Ett fel uppstod vid hämtning av pris för {ticker}: {e.with_traceback(e.__traceback__)}")
     #     return None, ERROR_CODES.PRICE_UNAVAILABLE
 
 
@@ -162,19 +163,19 @@ def köp(bot_name, ticker, antal, allow_add_to_position=True):
     """
 
     if antal <= 0:
-        print("Antal måste vara ett positivt heltal.")
+        thread_safe_print("Antal måste vara ett positivt heltal.")
         return ERROR_CODES.INVALID_AMOUNT
     antal = floor(antal)  # Vi kan bara köpa ett helt antal aktier
 
     portfolio_path = os.path.join(PATH_TILL_PORTFÖLJER, bot_name + ".json")
     if not os.path.exists(portfolio_path):
-        print(f"Portfölj för '{bot_name}' existerar inte.")
+        thread_safe_print(f"Portfölj för '{bot_name}' existerar inte.")
         return ERROR_CODES.PORTFOLIO_NOEXIST
 
     ticker = ticker.upper()
     price, error_code = _get_stock_price(ticker)
     if error_code != ERROR_CODES.SUCCESS:
-        print(f"Kunde inte hämta pris för {ticker}. Köpet avbröts.")
+        thread_safe_print(f"Kunde inte hämta pris för {ticker}. Köpet avbröts.")
         return error_code
 
     cost = price * antal
@@ -186,7 +187,7 @@ def köp(bot_name, ticker, antal, allow_add_to_position=True):
                 return ERROR_CODES.ADD_SHARES_NOT_ALLOWED
 
         if portfolio.get('fria_pengar', 0) < cost:
-            print(
+            thread_safe_print(
                 f"Inte tillräckligt med pengar. Behövs: {cost:.2f}, Tillgängligt: {portfolio.get('fria_pengar', 0):.2f}")
             return ERROR_CODES.INSUFFICIENT_AMOUNT
 
@@ -202,7 +203,7 @@ def köp(bot_name, ticker, antal, allow_add_to_position=True):
         with open(portfolio_path, 'w') as f:
             json.dump(portfolio, f, indent=4)
 
-        print(f"{bot_name} köpte {antal} st {ticker} för ${cost:.2f}.")
+        thread_safe_print(f"{bot_name} köpte {antal} st {ticker} för ${cost:.2f}.")
 
         # Logga köpet
         log(bot_name, ticker, 'BUY', antal, price)
@@ -210,7 +211,7 @@ def köp(bot_name, ticker, antal, allow_add_to_position=True):
         return ERROR_CODES.SUCCESS
 
     except (IOError, json.JSONDecodeError) as e:
-        print(f"Kunde inte läsa eller skriva till portföljfilen: {e}")
+        thread_safe_print(f"Kunde inte läsa eller skriva till portföljfilen: {e}")
         return ERROR_CODES.JSON_ERROR
 
 
@@ -228,13 +229,13 @@ def sälj(bot_name: str, ticker: str, antal: int):
     """
 
     if antal <= 0:
-        print("Antal måste vara postivt")
+        thread_safe_print("Antal måste vara postivt")
         return ERROR_CODES.INVALID_AMOUNT
     antal = floor(antal)
 
     portfolio_path = os.path.join(PATH_TILL_PORTFÖLJER, bot_name + ".json")
     if not os.path.exists(portfolio_path):
-        print(f"Portfölj för '{bot_name}' existerar inte.")
+        thread_safe_print(f"Portfölj för '{bot_name}' existerar inte.")
         return ERROR_CODES.PORTFOLIO_NOEXIST
 
     ticker = ticker.upper()
@@ -245,7 +246,7 @@ def sälj(bot_name: str, ticker: str, antal: int):
 
         owned_shares = portfolio.get('aktier', {}).get(ticker, 0)
         if owned_shares == 0:
-            print(f"Du äger inga aktier i {ticker}.")
+            thread_safe_print(f"Du äger inga aktier i {ticker}.")
             return ERROR_CODES.NO_SHARES
 
         # Om antal är större än max, sälj allt.
@@ -253,7 +254,7 @@ def sälj(bot_name: str, ticker: str, antal: int):
 
         price, error_code = _get_stock_price(ticker)
         if error_code != ERROR_CODES.SUCCESS:
-            print(f"Kunde inte hämta pris för {ticker}. Köpet avbröts.")
+            thread_safe_print(f"Kunde inte hämta pris för {ticker}. Köpet avbröts.")
             return error_code
         income = price * shares_to_sell
 
@@ -269,7 +270,7 @@ def sälj(bot_name: str, ticker: str, antal: int):
         with open(portfolio_path, 'w') as f:
             json.dump(portfolio, f, indent=4)
 
-        print(f"{bot_name} sålde {shares_to_sell} st {ticker} för ${income:.2f}.")
+        thread_safe_print(f"{bot_name} sålde {shares_to_sell} st {ticker} för ${income:.2f}.")
 
         # Logga försäljningen
         log(bot_name, ticker, 'SELL', shares_to_sell, price)
@@ -277,7 +278,7 @@ def sälj(bot_name: str, ticker: str, antal: int):
         return ERROR_CODES.SUCCESS
 
     except (IOError, json.JSONDecodeError) as e:
-        print(f"Kunde inte läsa eller skriva till portföljfilen: {e}")
+        thread_safe_print(f"Kunde inte läsa eller skriva till portföljfilen: {e}")
         return ERROR_CODES.JSON_ERROR
 
 
@@ -341,8 +342,8 @@ def utför_flera_transaktioner(bot_name: str, transaktioner: list):
                 log(bot_name, ticker, 'BUY', amount, price)
                 results.append(ERROR_CODES.SUCCESS)
                 portfolio_changed = True
-                print(
-                    f"{bot_name} köpte {amount} st {ticker} för ${cost:.2f} (Batch).")
+                if PRINT_TRANSACTIONS:
+                    thread_safe_print(f"{bot_name} köpte {amount} st {ticker} för ${cost:.2f} (Batch).")
 
             elif action == "SELL":
                 owned = portfolio.get('aktier', {}).get(ticker, 0)
@@ -361,8 +362,8 @@ def utför_flera_transaktioner(bot_name: str, transaktioner: list):
                 log(bot_name, ticker, 'SELL', to_sell, price)
                 results.append(ERROR_CODES.SUCCESS)
                 portfolio_changed = True
-                print(
-                    f"{bot_name} sålde {to_sell} st {ticker} för ${income:.2f} (Batch).")
+                if PRINT_TRANSACTIONS:
+                    thread_safe_print(f"{bot_name} sålde {to_sell} st {ticker} för ${income:.2f} (Batch).")
 
         if portfolio_changed:
             with open(portfolio_path, 'w') as f:
@@ -371,7 +372,7 @@ def utför_flera_transaktioner(bot_name: str, transaktioner: list):
         return results
 
     except (IOError, json.JSONDecodeError) as e:
-        print(f"Batch error: {e}")
+        thread_safe_print(f"Batch error: {e}")
         return [ERROR_CODES.JSON_ERROR] * len(transaktioner)
 
 ## mini-Tester ##
@@ -380,4 +381,4 @@ def utför_flera_transaktioner(bot_name: str, transaktioner: list):
 # köp("test", "NVDA", 15)
 # sälj("test", "AAPL", 3)
 # sälj("test", "NVDA", 10)
-# print(_get_stock_price("AAPL"))
+# thread_safe_print(_get_stock_price("AAPL"))

@@ -1,7 +1,8 @@
 """Använder Commodity Channel Index för att ge köp/sälj signaler"""
 
 import os
-import pandas_ta as ta
+from pandas_ta import hlc3, sma, mad
+
 import sys
 
 # Lägg till Gymnasiearbete mappen i path
@@ -35,11 +36,18 @@ class CCIBot():
 
         # Iterate through each stock's data to calculate EMAs and find signals.
         for t, df in price_data.items():
-            # Calculate the short-period and long-period Exponential Moving Averages (EMA).
-            cci = ta.cci(df['HIGH'], df['LOW'], df['PRICE'], self.length)
-            
+            if df is None or df.empty or len(df) < self.length:
+                continue
+            # Manual CCI calculation because pandas_ta CCI is broken
+            typical_price = hlc3(high=df['HIGH'], low=df['LOW'], close=df['PRICE'], talib=False)
+            mean_typical_price = sma(typical_price, length=self.length, talib=False)
+            mad_typical_price = mad(typical_price, length=self.length)
+
+            if typical_price is None or mean_typical_price is None or mad_typical_price is  None:
+                continue
+            cci = (typical_price - mean_typical_price) / (0.015 * mad_typical_price)
+                    
             if cci is None or cci.empty:
-                # print("PROBLEM WITH EMABOT: ema_short or ema_long is None")
                 continue
             # Make sure each stock has a state
             if t not in self.states:
@@ -64,3 +72,32 @@ class CCIBot():
                     self.states[t] = 'NEUTRAL'
 
         return suggestions
+
+if __name__ == "__main__":
+    from matplotlib import pyplot as plt
+    import pandas as pd
+    # temp test
+    bot = CCIBot("Test CCI Bot", ["AAPL"], risk=0.05)
+
+    data: pd.DataFrame = retrieve_data(["AAPL"], length=100)
+    print(data["AAPL"])
+    print("Max:", data["AAPL"]['PRICE'].max(), "Min:", data["AAPL"]['PRICE'].min(), "Deviation:", data["AAPL"]['PRICE'].std())
+
+     # data with enough points
+    suggestions = bot.find_options(data)
+    print("Suggestions:", suggestions)
+
+    # Manual CCI calculation for verification
+    typical_price = hlc3(high=data["AAPL"]['HIGH'], low=data["AAPL"]['LOW'], close=data["AAPL"]['PRICE'], talib=False)
+    mean_typical_price = sma(typical_price, length=20, talib=False)
+    mad_typical_price = mad(typical_price, length=20)
+
+
+    cci = (typical_price - mean_typical_price) / (0.015 * mad_typical_price)
+
+     # Plot CCI
+    plt.plot(cci)
+    plt.axhline(bot.upper, color='r', linestyle='--')
+    plt.axhline(bot.lower, color='g', linestyle='--')
+    plt.title("CCI Indicator for AAPL")
+    plt.show()

@@ -1,5 +1,4 @@
 aktiepriser/*
-!aktiepriser/_date*
 !aktiepriser/test*
 __pycache__/
 *.pyc

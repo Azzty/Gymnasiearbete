@@ -49,7 +49,7 @@ def get_time_to_market_close(now=None):
 
     close_dt = dt.datetime.combine(
         now.date(),
-        dt.time(16,0),
+        dt.time(16, 0),
         tzinfo=now.tzinfo
     )
 
@@ -59,12 +59,14 @@ def get_time_to_market_close(now=None):
 def trade_suggestions(bot, bot_suggestions: dict):
     """Utför bottens rekommenderade åtgärd"""
     portfolio_path = os.path.join(PATH_TILL_PORTFÖLJER, bot.bot_name + ".json")
-    
+
     # Ensure portfolio exists
     if not os.path.exists(portfolio_path):
-        thread_safe_print(f"Portfölj för '{bot.bot_name}' existerar inte. Skapar en ny portfölj.")
+        thread_safe_print(
+            f"Portfölj för '{bot.bot_name}' existerar inte. Skapar en ny portfölj.")
         with open(portfolio_path, "w") as f:
-            portfolio_setup = json.dumps({"fria_pengar": 100_000, "aktier": {}})
+            portfolio_setup = json.dumps(
+                {"fria_pengar": 100_000, "aktier": {}})
             f.write(portfolio_setup)
 
     # Load portfolio once for simulation
@@ -83,11 +85,13 @@ def trade_suggestions(bot, bot_suggestions: dict):
         if action == "BUY":
             # Kolla om t är i top 100, annars skippa
             if t in owned_tickers and t not in top_active_tickers:
-                thread_safe_print(f"{bot.bot_name} försökte köpa {t}, men den är inte top 100. Skippar...")
+                thread_safe_print(
+                    f"{bot.bot_name} försökte köpa {t}, men den är inte top 100. Skippar...")
                 continue
             # Kolla om ticker finns i pris_data, annars skippa
             if t not in price_data:
-                thread_safe_print(f"WARNING: Could not get price data for {t} to buy, skipping...")
+                thread_safe_print(
+                    f"WARNING: Could not get price data for {t} to buy, skipping...")
                 continue
             # Köp inget nytt precis innan marknaden stänger
             if get_time_to_market_close() < dt.timedelta(minutes=10):
@@ -102,27 +106,31 @@ def trade_suggestions(bot, bot_suggestions: dict):
 
             if amount > 0 and current_cash >= (amount * price):
                 current_cash -= (amount * price)
-                transactions.append({"ticker": t, "action": "BUY", "amount": amount, "allow_add": False, "price": price})
+                transactions.append(
+                    {"ticker": t, "action": "BUY", "amount": amount, "allow_add": False, "price": price})
 
         elif action == "SELL":
             if t not in owned_shares or owned_shares[t] == 0:
                 continue  # Vi har inget att sälja
             # Make sure we have price data before trying to access it
             if t not in price_data:
-                thread_safe_print(f"WARNING: Could not get price data for {t} to sell, skipping...")
+                thread_safe_print(
+                    f"WARNING: Could not get price data for {t} to sell, skipping...")
                 continue
             amount = owned_shares[t]
             price = price_data[t]["PRICE"].iloc[-1]
-            transactions.append({"ticker": t, "action": "SELL", "amount": amount, "price": price})
+            transactions.append(
+                {"ticker": t, "action": "SELL", "amount": amount, "price": price})
 
     if transactions:
         results = ha.utför_flera_transaktioner(bot.bot_name, transactions)
-        
+
         for i, res in enumerate(results):
             t = transactions[i]["ticker"]
             if res not in [ERROR_CODES.SUCCESS, ERROR_CODES.ADD_SHARES_NOT_ALLOWED]:
-                thread_safe_print(f"Problem uppstod när {bot.bot_name} skulle handla {t}. Felkod:{res.value}")
-            
+                thread_safe_print(
+                    f"Problem uppstod när {bot.bot_name} skulle handla {t}. Felkod:{res.value}")
+
             if transactions[i]["action"] == "SELL" and res == ERROR_CODES.SUCCESS:
                 if t in owned_tickers and not is_ticker_owned(t):
                     owned_tickers.remove(t)
@@ -207,10 +215,10 @@ def run_bot(bot):
     return bot.bot_name, bot_suggestions
 
 
-def log_portfolio_value(bot_name:str, portfolio:dict) -> None:
+def log_portfolio_value(bot_name: str, portfolio: dict) -> None:
     """
     Logs the total value of a bots portfolio
-    
+
     :param bot_name: The name of the bot who owns the portfolio
     :type bot_name: str
     :param portfolio: A dict that should have a key 'aktier' that contains
@@ -218,7 +226,8 @@ def log_portfolio_value(bot_name:str, portfolio:dict) -> None:
     :type portfolio: dict
     """
     if portfolio is None:
-        thread_safe_print(f"WARNING: Portfolio for {bot_name} is None, cannot log value.")
+        thread_safe_print(
+            f"WARNING: Portfolio for {bot_name} is None, cannot log value.")
         return
     log_file_path = os.path.join(
         PATH_TILL_LOGGAR, "portfolio-logg-" + dt.date.today().strftime("%Y-%m-%d") + ".csv")
@@ -226,9 +235,10 @@ def log_portfolio_value(bot_name:str, portfolio:dict) -> None:
         writer = csv.writer(csvfile, delimiter=',',
                             quotechar='"', quoting=csv.QUOTE_MINIMAL)
         if os.path.getsize(log_file_path) == 0:
-                            writer.writerow(
-                                ["TIMESTAMP", "BOT", "VALUE"])
+            writer.writerow(
+                ["TIMESTAMP", "BOT", "VALUE"])
         portfolio_value = portfolio['fria_pengar']
+        price_fetch_failed = False
         for ticker, amount in portfolio['aktier'].items():
             stock_price = None
             if ticker in price_data:
@@ -238,9 +248,18 @@ def log_portfolio_value(bot_name:str, portfolio:dict) -> None:
             if stock_price is not None:
                 portfolio_value += stock_price * amount
             else:
-                thread_safe_print(f"WARNING: Could not get price for {ticker} while logging portfolio value for {bot_name}, skipping...")
-                continue
-        writer.writerow([dt.datetime.now(), bot_name, portfolio_value])
+                thread_safe_print(
+                    f"WARNING: Could not get price for {ticker} while logging portfolio value for {bot_name}, skipping ticker...")
+                price_fetch_failed = True
+                # Don't log incomplete portfolio value if we couldn't fetch critical prices
+
+        # Only log if we got prices for all holdings
+        if not price_fetch_failed or len(portfolio['aktier']) == 0:
+            writer.writerow([dt.datetime.now(), bot_name, portfolio_value])
+        else:
+            thread_safe_print(
+                f"WARNING: Skipped logging portfolio value for {bot_name} due to missing price data.")
+
 
 def run_bots_periodically(bots, interval_seconds=60):
     global price_data, tickers, owned_tickers, top_active_tickers
@@ -263,12 +282,14 @@ def run_bots_periodically(bots, interval_seconds=60):
             # Check if market is open
             if not us_market_open():
                 if _has_started:
-                    thread_safe_print("Market is closed. Stopping bot execution.")
+                    thread_safe_print(
+                        "Market is closed. Stopping bot execution.")
                     break  # If program has already been run, then exit
                 _start_attempts += 1
                 time.sleep(60)
                 if _start_attempts > 20:  # Vänta max 20 min
-                    thread_safe_print("Market did not open. Program failed to start.")
+                    thread_safe_print(
+                        "Market did not open. Program failed to start.")
                     break
             else:
                 _has_started = True
@@ -291,8 +312,10 @@ def run_bots_periodically(bots, interval_seconds=60):
 
                 # Update list of tickers to monitor
                 if new_tickers_to_monitor != set(tickers):
-                    thread_safe_print("Ticker pool has changed. Restarting monitor...")
-                    thread_safe_print(f"Previously monitoring {len(tickers)} tickers.")
+                    thread_safe_print(
+                        "Ticker pool has changed. Restarting monitor...")
+                    thread_safe_print(
+                        f"Previously monitoring {len(tickers)} tickers.")
                     tickers = list(new_tickers_to_monitor)
                 else:
                     thread_safe_print("Ticker pool is unchanged.")
@@ -300,7 +323,8 @@ def run_bots_periodically(bots, interval_seconds=60):
                 # Always refresh websockets to prevent timeout
                 stop_monitoring()
                 monitor_stocks(tickers)
-                thread_safe_print(f"Monitoring restarted with {len(tickers)} tickers.")
+                thread_safe_print(
+                    f"Monitoring restarted with {len(tickers)} tickers.")
 
                 # Update tickers for each bot instance individually
                 thread_safe_print("Updating individual bot ticker lists...")
@@ -330,7 +354,8 @@ def run_bots_periodically(bots, interval_seconds=60):
                     if portfolio is not None:
                         log_portfolio_value(bot_name, portfolio)
                     else:
-                        thread_safe_print(f"WARNING: Could not log portfolio value for {bot_name} because portfolio is None.")
+                        thread_safe_print(
+                            f"WARNING: Could not log portfolio value for {bot_name} because portfolio is None.")
 
             if SHOW_SUGGESTIONS:
                 # Log results
@@ -350,7 +375,8 @@ def run_bots_periodically(bots, interval_seconds=60):
 
             end_time = time.monotonic()
             execution_time = end_time - start_time
-            thread_safe_print(f"Finished in {execution_time:.2f} seconds.", flush=True)
+            thread_safe_print(
+                f"Finished in {execution_time:.2f} seconds.", flush=True)
 
             # Om körningen tog längre tid än intervallet, hoppa direkt till nästa vänt-cykel
             # för att inte hamna i en "dödsspiral" där den försöker komma ikapp.
@@ -375,7 +401,8 @@ def sell_all_bot_portfolios():
                 price, _ = ha._get_stock_price(ticker)
                 if price is None:
                     continue
-            transactions.append({'ticker': ticker, 'action': 'SELL', 'amount': 9999999, 'price': price})
+            transactions.append(
+                {'ticker': ticker, 'action': 'SELL', 'amount': 9999999, 'price': price})
         if transactions:
             ha.utför_flera_transaktioner(bot.bot_name, transactions)
 
@@ -383,7 +410,7 @@ def sell_all_bot_portfolios():
 if __name__ == "__main__":
     # Start logging thread
     ha.start_logger()
-    
+
     # Starta datainsamlingen i bakgrunden
     monitor_stocks(tickers)
 
@@ -395,7 +422,8 @@ if __name__ == "__main__":
                          short_period=9, long_period=21)
     ema_bot = ema.EMABot("ema_crossover_bot", tickers,
                          short_period=9, long_period=21)
-    macd_cross_bot = macd.MACDCrossoverBot("macd_crossover_bot", tickers, short_period=5, long_period=35, signal_period=5)
+    macd_cross_bot = macd.MACDCrossoverBot(
+        "macd_crossover_bot", tickers, short_period=5, long_period=35, signal_period=5)
     # macd_zeroline_bot = macd.MACDZerolineBot("macd_zeroline_bot", tickers)
     obv_bot = obv.OBVBot("obv_bot", tickers, 9)
     random_bot = random_trader.RandomBot("random_bot", tickers)

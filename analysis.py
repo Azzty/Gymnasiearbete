@@ -1,4 +1,5 @@
 from typing import Generator, Any
+from itertools import cycle
 
 from matplotlib import pyplot as plt
 import pandas
@@ -18,6 +19,19 @@ TOP_LIST_AMOUNT = 10
 START_DATE = datetime.datetime(2026, 1, 14)
 # The date of experiment end
 END_DATE = datetime.datetime(2026, 2, 27)
+
+# ...existing code...
+
+# consistent brandning
+BOT_COLORS = {}
+BOT_COLOR_CYCLE = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
+
+
+def get_bot_color(bot_name: str):
+    if bot_name not in BOT_COLORS:
+        BOT_COLORS[bot_name] = next(BOT_COLOR_CYCLE)
+    return BOT_COLORS[bot_name]
+
 
 # Aktivera interaktivt läge för pyplot
 plt.ion()
@@ -282,7 +296,7 @@ def plot_trade_activity(trades) -> None:
             # print(
             #     f"Ticker: {ticker}, Bought at: {buy_price}, Sold at: {sell_price}, Quantity: {quantity}, Return: {trade_return:.2f}")
         plt.figure(bot_fig)
-        plt.plot(timestamps, values, label=bot)
+        plt.plot(timestamps, values, label=bot, color=get_bot_color(bot))
         plt.pause(0.1)  # Uppdatera graf
 
 
@@ -367,17 +381,17 @@ if __name__ == "__main__":
 
         # Hämta S&P 500 och NASDAQ Composite för jämförelse (end är exlusivt, så +1 dag)
         index_data = yf.download(
-            ['^SPX', '^IXIC'], start=START_DATE, end=END_DATE + datetime.timedelta(days=1), interval="1h")
+            ['^SPX', '^NDX'], start=START_DATE, end=END_DATE + datetime.timedelta(days=1), interval="1h")
 
         # Align index data with portfolio data by using the same time index
         spx_normalised = index_data['Close']['^SPX'] / \
             index_data['Close']['^SPX'].iloc[0] * 100_000
-        ixic_normalised = index_data['Close']['^IXIC'] / \
-            index_data['Close']['^IXIC'].iloc[0] * 100_000
+        ndx_normalised = index_data['Close']['^NDX'] / \
+            index_data['Close']['^NDX'].iloc[0] * 100_000
 
         # Remove timezone information to match portfolio dataframe index
         spx_normalised.index = spx_normalised.index.tz_localize(None)
-        ixic_normalised.index = ixic_normalised.index.tz_localize(None)
+        ndx_normalised.index = ndx_normalised.index.tz_localize(None)
 
         # Compare bot performance to S&P 500 on day-by-day basis
         bot_vs_spx = {}
@@ -441,27 +455,28 @@ if __name__ == "__main__":
         # Reindex both to ensure they use the same timestamps
         # Use the portfolio dataframe's index as the reference
         spx_aligned = spx_normalised.reindex(port_df.index, method='ffill')
-        ixic_aligned = ixic_normalised.reindex(port_df.index, method='ffill')
+        ndx = ndx_normalised.reindex(port_df.index, method='ffill')
 
         plt.figure(port_fig)
         for col in port_df.columns:
-            if col == 'up_down_bot':
-                continue  # Temporarily skip up_down_bot cause it sucked
-            plt.plot(range(len(port_df)), port_df[col], label=col)
+            # if col == 'up_down_bot':
+            #     continue  # Temporarily skip up_down_bot cause it sucked
+            plt.plot(range(len(port_df)),
+                     port_df[col], label=col, color=get_bot_color(col))
 
         # Plot index funds using the same x-axis alignment
         plt.plot(range(len(port_df)), spx_aligned.values, label="S&P 500",
                  linewidth=2, zorder=9, color="#FF0000")
-        plt.plot(range(len(port_df)), ixic_aligned.values, label="NASDAQ Composite",
+        plt.plot(range(len(port_df)), ndx.values, label="NASDAQ 100",
                  linewidth=2, zorder=9, color='#0000FF')
         # Annotate S&P 500 line
         plt.annotate('S&P 500', xy=(len(port_df)-1, spx_aligned.values[-1]),
                      xytext=(len(port_df)+12, spx_aligned.values[-1] + 2000),
                      arrowprops=dict(facecolor='black', arrowstyle="-"))
 
-        # Annotate NASDAQ Composite line
-        plt.annotate('NASDAQ Composite', xy=(len(port_df)-1, ixic_aligned.values[-1]),
-                     xytext=(len(port_df)+12, ixic_aligned.values[-1] - 1000),
+        # Annotate NASDAQ 100 line
+        plt.annotate('NASDAQ 100', xy=(len(port_df)-1, ndx.values[-1]),
+                     xytext=(len(port_df)+12, ndx.values[-1] - 1000),
                      arrowprops=dict(facecolor='black', arrowstyle="-"))
         # Logga aktivitet
         log_df = pandas.concat(
@@ -489,7 +504,8 @@ if __name__ == "__main__":
         for col in activity_df.columns:
             if col in ['random_bot', 'up_down_bot']:
                 continue  # Get better view of activity
-            plt.plot(range(len(activity_df)), activity_df[col], label=col)
+            plt.plot(range(len(activity_df)),
+                     activity_df[col], label=col, color=get_bot_color(col))
 
     print("Total quantity discrapencies:", total_quantity_discrapencies)
 
@@ -584,7 +600,7 @@ if __name__ == "__main__":
     plt.figure(port_fig)
     plt.xlabel('Tid (timmar)')
     plt.ylabel('Portföljvärde (USD)')
-    plt.title('Värdet av portföljer över tid (utan upp/ner botten)')
+    plt.title('Värdet av portföljer över tid')
     plt.legend()
 
     plt.ioff()
